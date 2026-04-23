@@ -31,6 +31,11 @@ if [ -z "${BASIC_AUTH_USER:-}" ] || [ -z "${BASIC_AUTH_PASSWORD:-}" ]; then
   exit 1
 fi
 
+if [ -z "${MLFLOW_PUBLIC_HOST:-}" ]; then
+  echo "ERROR: MLFLOW_PUBLIC_HOST is required (public hostname only, e.g. my-app.up.railway.app — no https://)." >&2
+  exit 1
+fi
+
 export AWS_DEFAULT_REGION="${AWS_DEFAULT_REGION:-auto}"
 export AWS_EC2_METADATA_DISABLED="${AWS_EC2_METADATA_DISABLED:-true}"
 
@@ -39,6 +44,19 @@ MLFLOW_INTERNAL_PORT="${MLFLOW_INTERNAL_PORT:-5000}"
 
 ARTIFACT_PREFIX="${R2_ARTIFACT_PREFIX:-mlflow}"
 DEFAULT_ARTIFACT_ROOT="s3://${R2_BUCKET}/${ARTIFACT_PREFIX}"
+
+# DNS rebinding / Host header allowlist (MLflow 3.5+ uvicorn server). Override in Railway if needed.
+if [ -z "${MLFLOW_SERVER_ALLOWED_HOSTS:-}" ]; then
+  export MLFLOW_SERVER_ALLOWED_HOSTS="${MLFLOW_PUBLIC_HOST},localhost:*,127.0.0.1:*"
+else
+  export MLFLOW_SERVER_ALLOWED_HOSTS
+fi
+
+if [ -z "${MLFLOW_SERVER_CORS_ALLOWED_ORIGINS:-}" ]; then
+  export MLFLOW_SERVER_CORS_ALLOWED_ORIGINS="https://${MLFLOW_PUBLIC_HOST}"
+else
+  export MLFLOW_SERVER_CORS_ALLOWED_ORIGINS
+fi
 
 if [ -z "${BASIC_AUTH_PASSWORD_HASH:-}" ]; then
   BASIC_AUTH_PASSWORD_HASH="$(caddy hash-password --plaintext "${BASIC_AUTH_PASSWORD}")"
@@ -52,12 +70,30 @@ export PORT BASIC_AUTH_USER
 unset BASIC_AUTH_PASSWORD
 
 echo "Starting MLflow server..."
-mlflow server \
-  --backend-store-uri "${DATABASE_URL}" \
-  --default-artifact-root "${DEFAULT_ARTIFACT_ROOT}" \
-  --host "${MLFLOW_INTERNAL_HOST}" \
-  --port "${MLFLOW_INTERNAL_PORT}" \
-  --gunicorn-opts "--access-logfile - --error-logfile - --workers ${MLFLOW_WORKERS:-2}" &
+if [ "${MLFLOW_USE_GUNICORN:-0}" = "1" ]; then
+  echo "WARNING: MLFLOW_USE_GUNICORN=1 — security middleware / allowed-hosts may not apply as with the default uvicorn server." >&2
+  mlflow server \
+    --backend-store-uri "${DATABASE_URL}" \
+    --default-artifact-root "${DEFAULT_ARTIFACT_ROOT}" \
+    --host "${MLFLOW_INTERNAL_HOST}" \
+    --port "${MLFLOW_INTERNAL_PORT}" \
+    --gunicorn-opts "--access-logfile - --error-logfile - --workers ${MLFLOW_WORKERS:-2}" &
+else
+  if [ -n "${MLFLOW_UVICORN_OPTS:-}" ]; then
+    mlflow server \
+      --backend-store-uri "${DATABASE_URL}" \
+      --default-artifact-root "${DEFAULT_ARTIFACT_ROOT}" \
+      --host "${MLFLOW_INTERNAL_HOST}" \
+      --port "${MLFLOW_INTERNAL_PORT}" \
+      --uvicorn-opts "${MLFLOW_UVICORN_OPTS}" &
+  else
+    mlflow server \
+      --backend-store-uri "${DATABASE_URL}" \
+      --default-artifact-root "${DEFAULT_ARTIFACT_ROOT}" \
+      --host "${MLFLOW_INTERNAL_HOST}" \
+      --port "${MLFLOW_INTERNAL_PORT}" &
+  fi
+fi
 
 MLFLOW_PID="$!"
 
@@ -70,4 +106,3 @@ trap cleanup INT TERM
 
 echo "Starting Caddy reverse proxy on :${PORT}..."
 caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
-
