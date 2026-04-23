@@ -1,0 +1,17 @@
+{
+  auto_https off
+  servers {
+    trusted_proxies static private_ranges
+  }
+}
+
+:{$PORT} {
+  encode zstd gzip
+
+  basicauth {
+    {$BASIC_AUTH_USER} {$BASIC_AUTH_PASSWORD_HASH}
+  }
+
+  reverse_proxy 127.0.0.1:5000
+}
+
