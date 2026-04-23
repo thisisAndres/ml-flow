@@ -53,6 +53,34 @@ Optional:
 6. Open the Railway public URL.
    - You should get a **Basic Auth prompt**, then the **MLflow UI**.
 
+## CI/CD
+
+### Continuous integration
+
+GitHub Actions runs on:
+
+- pushes to `dev`
+- pull requests targeting `dev` or `master`
+
+Checks:
+
+- ShellCheck (`start.sh`)
+- Docker build
+
+### Continuous deployment (Railway)
+
+On every push to `main`, GitHub Actions will deploy using the Railway CLI (`railway up --ci`).
+
+Add these **repository secrets** in GitHub (Settings → Secrets and variables → Actions):
+
+- `RAILWAY_TOKEN` (recommended: a Railway **Project Token** scoped to your **production** environment)
+- `RAILWAY_PROJECT_ID`
+- `RAILWAY_SERVICE_ID`
+
+Optional:
+
+- `RAILWAY_ENVIRONMENT`: defaults to `production` if unset
+
 ## Smoke test (artifact lands in R2)
 
 From your laptop (or any machine with network access to the Railway URL):
