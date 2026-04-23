@@ -71,14 +71,6 @@ Optional:
 6. Open the Railway public URL.
    - You should get a **Basic Auth prompt**, then the **MLflow UI**.
 
-### Troubleshooting: “Invalid Host header” / DNS rebinding
-
-If the UI shows an error about **Invalid Host header** or **DNS rebinding**:
-
-1. Confirm **`MLFLOW_PUBLIC_HOST`** matches the hostname you use in the browser (e.g. `*.up.railway.app`).
-2. After attaching a **custom domain**, update **`MLFLOW_PUBLIC_HOST`** (and optionally set **`MLFLOW_SERVER_CORS_ALLOWED_ORIGINS`** to `https://your-custom-domain`).
-3. Avoid **`MLFLOW_USE_GUNICORN=1`** unless you know you need it; the default **Uvicorn** server is what MLflow’s allowed-hosts middleware targets.
-
 ## CI/CD
 
 ### Continuous integration
